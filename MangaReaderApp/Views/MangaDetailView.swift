@@ -7,12 +7,18 @@ struct MangaDetailView: View {
     let sourceId: String
 
     @StateObject private var viewModel: MangaDetailViewModel
+    @Environment(\.modelContext) private var modelContext
     @State private var selectedChapter: Chapter?
+    @State private var showReaderForHistory = false
 
     init(mangaId: String, sourceId: String) {
         self.mangaId = mangaId
         self.sourceId = sourceId
-        _viewModel = StateObject(wrappedValue: MangaDetailViewModel(mangaId: mangaId, sourceId: sourceId))
+        _viewModel = StateObject(wrappedValue: MangaDetailViewModel(
+            mangaId: mangaId,
+            sourceId: sourceId,
+            modelContext: ModelContainerProvider.shared.modelContainer.mainContext
+        ))
     }
 
     var body: some View {
@@ -42,10 +48,26 @@ struct MangaDetailView: View {
             }
         }
         .fullScreenCover(item: $selectedChapter) { chapter in
-            if let chapterIndex = viewModel.chapters.firstIndex(where: { $0.id == chapter.id }) {
+            if let chapterIndex = viewModel.chapters.firstIndex(where: { $0.id == chapter.id }),
+               let manga = viewModel.mangaDetail {
                 ReaderView(
                     mangaId: mangaId,
                     sourceId: sourceId,
+                    mangaTitle: manga.title,
+                    coverURL: manga.coverURL,
+                    chapters: viewModel.chapters,
+                    startChapterIndex: chapterIndex
+                )
+            }
+        }
+        .fullScreenCover(isPresented: $showReaderForHistory) {
+            if let chapterIndex = viewModel.continueReadingChapterIndex,
+               let manga = viewModel.mangaDetail {
+                ReaderView(
+                    mangaId: mangaId,
+                    sourceId: sourceId,
+                    mangaTitle: manga.title,
+                    coverURL: manga.coverURL,
                     chapters: viewModel.chapters,
                     startChapterIndex: chapterIndex
                 )
@@ -188,6 +210,41 @@ struct MangaDetailView: View {
                 Text("\(viewModel.chapters.count) 章")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+            }
+
+            // Continue reading button
+            if viewModel.hasReadingHistory, let history = viewModel.readingHistory {
+                Button {
+                    showReaderForHistory = true
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("继续阅读")
+                                .font(.headline)
+                                .foregroundColor(.white)
+
+                            Text("读到: \(history.lastReadChapterTitle)")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "play.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                    }
+                    .padding()
+                    .background(
+                        LinearGradient(
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(12)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
 
             if viewModel.chapters.isEmpty {

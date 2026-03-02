@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import SwiftData
 
 /// ViewModel for manga detail
 @MainActor
@@ -12,9 +13,11 @@ class MangaDetailViewModel: ObservableObject {
     @Published var isChaptersReversed = false
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var readingHistory: ReadingHistory?
 
     let mangaId: String
     let sourceId: String
+    private let modelContext: ModelContext
 
     /// Computed chapters with sorting applied
     var chapters: [Chapter] {
@@ -23,9 +26,10 @@ class MangaDetailViewModel: ObservableObject {
 
     // MARK: - Initialization
 
-    init(mangaId: String, sourceId: String) {
+    init(mangaId: String, sourceId: String, modelContext: ModelContext) {
         self.mangaId = mangaId
         self.sourceId = sourceId
+        self.modelContext = modelContext
     }
 
     // MARK: - Private Methods
@@ -65,6 +69,9 @@ class MangaDetailViewModel: ObservableObject {
             if rawChapters.isEmpty {
                 await loadChapterList()
             }
+
+            // Load reading history
+            loadReadingHistory()
         } catch {
             // Print detailed error for debugging
             print("❌ Load Manga Info Error: \(error)")
@@ -106,5 +113,29 @@ class MangaDetailViewModel: ObservableObject {
     /// Refresh all data
     func refresh() async {
         await loadMangaInfo()
+    }
+
+    // MARK: - Reading History
+
+    /// Load reading history for this manga
+    func loadReadingHistory() {
+        readingHistory = HistoryViewModel.getReadingHistory(
+            modelContext: modelContext,
+            mangaId: mangaId,
+            sourceId: sourceId
+        )
+    }
+
+    /// Get the chapter index for continue reading
+    var continueReadingChapterIndex: Int? {
+        guard let history = readingHistory else { return nil }
+
+        // Find the chapter index in the current sorted chapters list
+        return chapters.firstIndex { $0.id == history.lastReadChapterId }
+    }
+
+    /// Check if there's reading history to continue
+    var hasReadingHistory: Bool {
+        readingHistory != nil
     }
 }

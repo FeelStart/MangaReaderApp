@@ -1,4 +1,5 @@
 import SwiftUI
+import Kingfisher
 
 // MARK: - Theme Configuration
 
@@ -111,27 +112,149 @@ public struct FavoritesView: View {
 
 /// History view
 public struct HistoryView: View {
-    public init() {}
+    @StateObject private var viewModel: HistoryViewModel
+    @Environment(\.modelContext) private var modelContext
+    @State private var selectedHistory: ReadingHistory?
+    @State private var showClearAlert = false
+
+    public init() {
+        _viewModel = StateObject(wrappedValue: HistoryViewModel(
+            modelContext: ModelContainerProvider.shared.modelContainer.mainContext
+        ))
+    }
 
     public var body: some View {
         NavigationStack {
-            EmptyStateView(
-                icon: "clock",
-                title: "暂无历史",
-                message: "阅读历史会显示在这里"
-            )
+            ZStack {
+                if viewModel.isLoading {
+                    ProgressView("加载中...")
+                } else if viewModel.historyItems.isEmpty {
+                    EmptyStateView(
+                        icon: "clock",
+                        title: "暂无历史",
+                        message: "阅读历史会显示在这里"
+                    )
+                } else {
+                    historyList
+                }
+            }
             .navigationTitle("历史")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("清空") {
-                        // TODO: Clear history
+                        showClearAlert = true
                     }
-                    .disabled(true)
+                    .disabled(viewModel.historyItems.isEmpty)
                 }
+            }
+            .task {
+                viewModel.loadHistory()
+            }
+            .alert("清空历史", isPresented: $showClearAlert) {
+                Button("取消", role: .cancel) { }
+                Button("清空", role: .destructive) {
+                    viewModel.clearAllHistory()
+                }
+            } message: {
+                Text("确定要清空所有阅读历史吗？")
+            }
+            .fullScreenCover(item: $selectedHistory) { history in
+                // Navigate to reader view
+                MangaDetailView(mangaId: history.mangaId, sourceId: history.sourceId)
             }
         }
     }
+
+    private var historyList: some View {
+        List {
+            ForEach(viewModel.historyItems, id: \.mangaId) { history in
+                Button {
+                    selectedHistory = history
+                } label: {
+                    HistoryRow(history: history)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        viewModel.deleteHistory(history)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
 }
+
+/// History row component
+struct HistoryRow: View {
+    let history: ReadingHistory
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Cover image
+            if let coverURL = history.coverURL {
+                KFImage(coverURL)
+                    .placeholder {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.2))
+                            .overlay {
+                                ProgressView()
+                            }
+                    }
+                    .resizable()
+                    .aspectRatio(3/4, contentMode: .fill)
+                    .frame(width: 60, height: 80)
+                    .cornerRadius(8)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 60, height: 80)
+                    .cornerRadius(8)
+                    .overlay {
+                        Image(systemName: "book.closed")
+                            .foregroundColor(.gray)
+                    }
+            }
+
+            // Info
+            VStack(alignment: .leading, spacing: 6) {
+                Text(history.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .foregroundColor(.primary)
+
+                Text("读到: \(history.lastReadChapterTitle)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                    Text(formatDate(history.lastReadTime))
+                        .font(.caption)
+                }
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func formatDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
 
 /// Settings view
 public struct SettingsView: View {

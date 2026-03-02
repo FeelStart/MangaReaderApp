@@ -5,24 +5,36 @@ import Kingfisher
 struct ReaderView: View {
     let mangaId: String
     let sourceId: String
+    let mangaTitle: String
+    let coverURL: URL?
     let chapters: [Chapter]
     let startChapterIndex: Int
 
     @StateObject private var viewModel: ReaderViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var showControls = false
     @State private var scrollPosition: Int?
 
-    init(mangaId: String, sourceId: String, chapters: [Chapter], startChapterIndex: Int) {
+    init(mangaId: String, sourceId: String, mangaTitle: String, coverURL: URL?,
+         chapters: [Chapter], startChapterIndex: Int) {
         self.mangaId = mangaId
         self.sourceId = sourceId
+        self.mangaTitle = mangaTitle
+        self.coverURL = coverURL
         self.chapters = chapters
         self.startChapterIndex = startChapterIndex
+
+        // Note: We can't access modelContext here in init
+        // So we'll create the viewModel in onAppear
         _viewModel = StateObject(wrappedValue: ReaderViewModel(
             mangaId: mangaId,
             sourceId: sourceId,
+            mangaTitle: mangaTitle,
+            coverURL: coverURL,
             chapters: chapters,
-            startChapterIndex: startChapterIndex
+            startChapterIndex: startChapterIndex,
+            modelContext: ModelContainerProvider.shared.modelContainer.mainContext
         ))
     }
 
@@ -266,6 +278,8 @@ struct ZoomableImageView: View {
     return ReaderView(
         mangaId: "test",
         sourceId: "copy",
+        mangaTitle: "测试漫画",
+        coverURL: nil,
         chapters: [testChapter],
         startChapterIndex: 0
     )

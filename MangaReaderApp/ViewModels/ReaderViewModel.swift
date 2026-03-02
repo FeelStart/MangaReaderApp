@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import Kingfisher
+import SwiftData
 
 /// ViewModel for manga reader
 @MainActor
@@ -13,26 +14,43 @@ class ReaderViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    @Published var currentPage = 0
-    @Published var currentChapterIndex = 0
+    @Published var currentPage = 0 {
+        didSet {
+            saveReadingProgress()
+        }
+    }
+    @Published var currentChapterIndex = 0 {
+        didSet {
+            saveReadingProgress()
+        }
+    }
     @Published var chapterTitle: String
 
     let mangaId: String
     let sourceId: String
+    let mangaTitle: String
+    let coverURL: URL?
     let chapters: [Chapter]
 
     // Image prefetcher
     private var imagePrefetcher: ImagePrefetcher?
     private let prefetchCount = 10 // Number of images to prefetch ahead
 
+    // SwiftData context for saving reading progress
+    private let modelContext: ModelContext
+
     // MARK: - Initialization
 
-    init(mangaId: String, sourceId: String, chapters: [Chapter], startChapterIndex: Int) {
+    init(mangaId: String, sourceId: String, mangaTitle: String, coverURL: URL?,
+         chapters: [Chapter], startChapterIndex: Int, modelContext: ModelContext) {
         self.mangaId = mangaId
         self.sourceId = sourceId
+        self.mangaTitle = mangaTitle
+        self.coverURL = coverURL
         self.chapters = chapters
         self.currentChapterIndex = startChapterIndex
         self.chapterTitle = chapters[safe: startChapterIndex]?.title ?? ""
+        self.modelContext = modelContext
     }
 
     // MARK: - Data Loading
@@ -147,6 +165,24 @@ class ReaderViewModel: ObservableObject {
     var progressText: String {
         guard !images.isEmpty else { return "0/0" }
         return "\(currentPage + 1)/\(images.count)"
+    }
+
+    // MARK: - Reading Progress
+
+    /// Save reading progress to history
+    private func saveReadingProgress() {
+        guard let currentChapter = chapters[safe: currentChapterIndex] else { return }
+
+        HistoryViewModel.saveReadingProgress(
+            modelContext: modelContext,
+            mangaId: mangaId,
+            sourceId: sourceId,
+            title: mangaTitle,
+            coverURL: coverURL,
+            chapterId: currentChapter.id,
+            chapterTitle: currentChapter.title,
+            page: currentPage
+        )
     }
 }
 
